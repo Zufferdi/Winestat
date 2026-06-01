@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard · Vin importé en Suisse 2025</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  :root {
+    --paper: #FAF7F2; --paper-2: #F2EDE4; --ink: #2C1810; --muted: #7A6F66;
+    --grid: #E8E0D3; --wine: #722F37; --wine-2: #A63D47; --gold: #D4A547;
+    --accent: #C9444E;
+    --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  [data-theme="dark"] {
+    --paper: #1A1410; --paper-2: #251D18; --ink: #F2EDE4; --muted: #9C9389;
+    --grid: #3A2E26; --wine: #C9444E; --wine-2: #A63D47; --gold: #E6C36A;
+    --accent: #E6C36A;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); transition: background var(--transition), color var(--transition); }
+  body { font-family: 'Manrope', system-ui, sans-serif; font-feature-settings: "tnum"; line-height: 1.5; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 48px 32px 80px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 40px; }
+  .header-text { flex: 1; }
+  .eyebrow { text-transform: uppercase; letter-spacing: 0.18em; font-size: 11px; color: var(--wine); font-weight: 600; margin-bottom: 14px; }
+  h1 { font-family: 'Fraunces', serif; font-weight: 600; font-size: clamp(32px, 4.5vw, 56px); line-height: 1.05; margin: 0 0 12px; letter-spacing: -0.02em; }
+  h1 em { font-style: italic; color: var(--wine); font-weight: 400; }
+  .lede { font-family: 'Fraunces', serif; font-size: 17px; color: var(--muted); max-width: 720px; font-weight: 400; line-height: 1.5; margin: 0; }
+  .theme-toggle { background: none; border: 1px solid var(--ink); width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 20px; color: var(--ink); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all var(--transition); }
+  .theme-toggle:hover { background: var(--paper-2); transform: rotate(15deg); }
+
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); margin: 0 0 56px; }
+  .kpi { padding: 22px 18px; border-right: 1px solid var(--grid); }
+  .kpi:last-child { border-right: none; }
+  .kpi-value { font-family: 'Fraunces', serif; font-size: 32px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; }
+  .kpi-unit { font-family: 'Fraunces', serif; font-size: 16px; color: var(--muted); margin-left: 3px; }
+  .kpi-label { margin-top: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+
+  .controls { display: flex; gap: 16px; align-items: center; margin-bottom: 24px; flex-wrap: wrap; }
+  .type-toggle { display: inline-flex; border: 1px solid var(--ink); }
+  .type-toggle button { background: var(--paper); border: none; padding: 9px 16px; font-family: inherit; font-size: 12px; font-weight: 500; color: var(--ink); cursor: pointer; border-right: 1px solid var(--ink); transition: all var(--transition); }
+  .type-toggle button:last-child { border-right: none; }
+  .type-toggle button.active { background: var(--ink); color: var(--paper); }
+  .reset-btn { background: var(--paper); border: 1px solid var(--grid); padding: 9px 14px; font-family: inherit; font-size: 12px; color: var(--muted); cursor: pointer; transition: all var(--transition); }
+  .reset-btn:hover { color: var(--ink); border-color: var(--ink); }
+  .selected-info { font-size: 13px; color: var(--muted); font-style: italic; margin-left: auto; }
+  .selected-info b { color: var(--wine); font-style: normal; }
+
+  .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 32px; margin-bottom: 32px; }
+  .grid-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .panel { background: var(--paper); border: 1px solid var(--grid); padding: 24px; transition: border-color var(--transition); }
+  .panel:hover { border-color: var(--ink); }
+  .panel h2 { font-family: 'Fraunces', serif; font-size: 18px; margin: 0 0 4px; font-weight: 600; }
+  .panel .panel-sub { font-size: 12px; color: var(--muted); font-style: italic; margin-bottom: 18px; }
+
+  svg { display: block; max-width: 100%; }
+  .canton-bubble { cursor: pointer; transition: opacity var(--transition); }
+  .canton-bubble.dimmed { opacity: 0.25; }
+  .canton-bubble.selected { stroke: var(--ink); stroke-width: 2.5px; }
+  .canton-label { font-family: 'Manrope', sans-serif; font-size: 9.5px; font-weight: 700; fill: var(--ink); pointer-events: none; }
+  .bar-rect { transition: opacity var(--transition); cursor: pointer; }
+  .bar-rect:hover { opacity: 0.7; }
+  .axis text { font-family: 'Manrope', sans-serif; font-size: 10px; fill: var(--muted); }
+  .axis line, .axis path { stroke: var(--grid); }
+  .axis .domain { stroke: var(--muted); }
+  .scatter-dot { cursor: pointer; transition: opacity var(--transition); }
+  .scatter-dot:hover { stroke: var(--ink); stroke-width: 1.5px; }
+  .diag-line { stroke: var(--muted); stroke-dasharray: 4 4; stroke-width: 1; }
+  .gridline { stroke: var(--grid); stroke-dasharray: 2 3; }
+
+  .tooltip { position: absolute; background: var(--ink); color: var(--paper); padding: 10px 14px; border-radius: 4px; font-size: 12px; line-height: 1.5; pointer-events: none; opacity: 0; transition: opacity var(--transition); max-width: 260px; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .tooltip.visible { opacity: 1; }
+  .tooltip .t-title { font-weight: 700; font-family: 'Fraunces', serif; font-size: 13px; margin-bottom: 4px; }
+  .tooltip .t-row { display: flex; justify-content: space-between; gap: 12px; }
+  .tooltip .t-row span:last-child { color: var(--gold); font-variant-numeric: tabular-nums; }
+
+  .history-line { fill: none; stroke-width: 2.4; }
+  .history-area { opacity: 0.15; }
+
+  .footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--grid); color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .footer a { color: var(--wine); text-decoration: none; }
+  .footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 900px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .grid, .grid-bottom { grid-template-columns: 1fr; }
+    .wrap { padding: 24px 16px 48px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="header-text">
+      <div class="eyebrow">Dashboard interactif · Données OFAG 2025</div>
+      <h1>Le marché du vin <em>importé</em> en Suisse</h1>
+      <p class="lede">
+        Cliquez sur un canton pour filtrer. Basculez entre rouge, blanc et total.
+        Toutes les vues sont liées.
+      </p>
+    </div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Basculer le thème">☾</button>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="controls">
+    <div class="type-toggle" role="tablist">
+      <button data-type="total" class="active">Total</button>
+      <button data-type="rouge">Rouge</button>
+      <button data-type="blanc">Blanc</button>
+    </div>
+    <button class="reset-btn" id="resetBtn">↺ Réinitialiser</button>
+    <div class="selected-info" id="selInfo"></div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Carte des cantons</h2>
+      <p class="panel-sub">Bulle proportionnelle au volume — cliquez pour filtrer le top 20 →</p>
+      <svg id="mapSvg"></svg>
+    </div>
+    <div class="panel">
+      <h2>Top 20 importateurs</h2>
+      <p class="panel-sub" id="barsSub">Tous cantons confondus</p>
+      <svg id="barsSvg"></svg>
+    </div>
+  </div>
+
+  <div class="grid-bottom">
+    <div class="panel">
+      <h2>Rouge vs blanc par importateur</h2>
+      <p class="panel-sub">Chaque point = un importateur · échelle logarithmique</p>
+      <svg id="scatterSvg"></svg>
+    </div>
+    <div class="panel">
+      <h2>Évolution 2012-2025</h2>
+      <p class="panel-sub">Volume importé total — source OFDF</p>
+      <svg id="historySvg"></svg>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div>Source : OFAG (importateurs) · OFDF (historique). Données 2025.</div>
+    <div><a href="../interactive/explorer.html">→ Voir l'explorateur tabulaire</a></div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const DATA = __PAYLOAD__;
+
+const CENTROIDS = {
+  ZH:[47.42,8.65],BE:[46.95,7.55],LU:[47.07,8.18],UR:[46.75,8.65],
+  SZ:[47.05,8.75],OW:[46.85,8.25],NW:[46.95,8.40],GL:[46.95,9.00],
+  ZG:[47.16,8.50],FR:[46.75,7.10],SO:[47.30,7.65],BS:[47.56,7.60],
+  BL:[47.43,7.74],SH:[47.72,8.62],AR:[47.40,9.32],AI:[47.32,9.42],
+  SG:[47.30,9.30],GR:[46.70,9.55],AG:[47.40,8.20],TG:[47.55,9.05],
+  TI:[46.30,8.85],VD:[46.60,6.50],VS:[46.20,7.55],NE:[46.95,6.80],
+  GE:[46.20,6.15],JU:[47.30,7.10],FL:[47.16,9.55],
+};
+
+const state = { type: 'total', selectedCanton: null };
+
+const metric = d => state.type === 'rouge' ? d.r : state.type === 'blanc' ? d.b : d.t;
+const metricCanton = c => state.type === 'rouge' ? c.rouge : state.type === 'blanc' ? c.blanc : c.total;
+const fmt = n => {
+  if (n >= 1e6) return (n/1e6).toFixed(1) + ' M';
+  if (n >= 1e3) return (n/1e3).toFixed(0) + ' k';
+  return Math.round(n).toLocaleString('fr-CH');
+};
+
+const themeBtn = document.getElementById('themeToggle');
+themeBtn.addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  themeBtn.textContent = next === 'dark' ? '☀' : '☾';
+  renderAll();
+});
+
+function renderKpis() {
+  const k = DATA.kpis;
+  const items = [
+    {v: k.n_importers.toLocaleString('fr-CH'), u: '', l: 'Importateurs'},
+    {v: (k.total_litres/1e6).toFixed(0), u: 'M L', l: 'Volume total'},
+    {v: (k.share_rouge*100).toFixed(0), u: '% rouge', l: 'Mix rouge/blanc'},
+    {v: (k.top2_share*100).toFixed(0), u: '%', l: 'Part des 2 premiers'},
+    {v: k.gini.toFixed(2), u: '', l: 'Coefficient de Gini'},
+  ];
+  d3.select('#kpis').html('').selectAll('div').data(items).enter()
+    .append('div').attr('class', 'kpi').html(d =>
+      `<div><span class="kpi-value">${d.v}</span><span class="kpi-unit">${d.u}</span></div>
+       <div class="kpi-label">${d.l}</div>`);
+}
+
+const tooltip = d3.select('#tooltip');
+function showTooltip(html, event) {
+  tooltip.html(html).classed('visible', true);
+  moveTooltip(event);
+}
+function moveTooltip(event) {
+  const tw = tooltip.node().offsetWidth;
+  const x = Math.min(window.innerWidth - tw - 16, event.pageX + 14);
+  tooltip.style('left', x + 'px').style('top', (event.pageY - 10) + 'px');
+}
+function hideTooltip() { tooltip.classed('visible', false); }
+function renderMap() {
+  const svg = d3.select('#mapSvg');
+  const w = svg.node().getBoundingClientRect().width || 600;
+  const h = 420;
+  svg.attr('viewBox', `0 0 ${w} ${h}`).attr('height', h).html('');
+
+  const lons = Object.values(CENTROIDS).map(c => c[1]);
+  const lats = Object.values(CENTROIDS).map(c => c[0]);
+  const xScale = d3.scaleLinear().domain([d3.min(lons)-0.2, d3.max(lons)+0.2]).range([30, w-30]);
+  const yScale = d3.scaleLinear().domain([d3.min(lats)-0.1, d3.max(lats)+0.1]).range([30, h-30]);
+
+  const maxVal = d3.max(DATA.cantons, c => metricCanton(c));
+  const rScale = d3.scaleSqrt().domain([0, maxVal]).range([3, 48]);
+
+  const wineRed = getComputedStyle(document.documentElement).getPropertyValue('--wine').trim();
+  const gold = '#D4A547';
+  const colorScale = d3.scaleLinear().domain([0.4, 1]).range([gold, wineRed]).clamp(true);
+
+  const g = svg.append('g');
+
+  g.selectAll('circle')
+    .data(DATA.cantons)
+    .enter().append('circle')
+    .attr('class', 'canton-bubble')
+    .attr('cx', d => xScale(CENTROIDS[d.canton]?.[1] ?? 8))
+    .attr('cy', d => yScale(CENTROIDS[d.canton]?.[0] ?? 47))
+    .attr('r', d => rScale(metricCanton(d)))
+    .attr('fill', d => colorScale(d.share_rouge))
+    .attr('stroke', getComputedStyle(document.documentElement).getPropertyValue('--ink').trim())
+    .attr('stroke-width', 0.6)
+    .attr('opacity', 0.78)
+    .classed('selected', d => d.canton === state.selectedCanton)
+    .classed('dimmed', d => state.selectedCanton && d.canton !== state.selectedCanton)
+    .on('mouseenter', (e, d) => {
+      showTooltip(`
+        <div class="t-title">${d.canton}</div>
+        <div class="t-row"><span>Total :</span><span>${fmt(d.total)} L</span></div>
+        <div class="t-row"><span>Rouge :</span><span>${fmt(d.rouge)} L</span></div>
+        <div class="t-row"><span>Blanc :</span><span>${fmt(d.blanc)} L</span></div>
+        <div class="t-row"><span>Importateurs :</span><span>${d.n}</span></div>
+      `, e);
+    })
+    .on('mousemove', e => moveTooltip(e))
+    .on('mouseleave', hideTooltip)
+    .on('click', (e, d) => {
+      state.selectedCanton = state.selectedCanton === d.canton ? null : d.canton;
+      renderAll();
+    });
+
+  g.selectAll('text')
+    .data(DATA.cantons.filter(c => metricCanton(c) > maxVal * 0.05))
+    .enter().append('text')
+    .attr('class', 'canton-label')
+    .attr('x', d => xScale(CENTROIDS[d.canton]?.[1] ?? 8))
+    .attr('y', d => yScale(CENTROIDS[d.canton]?.[0] ?? 47) + 3)
+    .attr('text-anchor', 'middle')
+    .text(d => d.canton);
+}
+
+function renderBars() {
+  const svg = d3.select('#barsSvg');
+  const w = svg.node().getBoundingClientRect().width || 500;
+  const h = 420;
+  svg.attr('viewBox', `0 0 ${w} ${h}`).attr('height', h).html('');
+
+  let importers = DATA.importers;
+  if (state.selectedCanton) {
+    importers = importers.filter(i => i.c === state.selectedCanton);
+  }
+  const top = importers.slice().sort((a, b) => metric(b) - metric(a)).slice(0, 20);
+
+  d3.select('#barsSub').text(
+    state.selectedCanton
+      ? `Canton ${state.selectedCanton} · ${importers.length} importateurs`
+      : 'Tous cantons confondus'
+  );
+
+  const m = {top: 10, right: 60, bottom: 30, left: 180};
+  const iw = w - m.left - m.right;
+  const ih = h - m.top - m.bottom;
+
+  const x = d3.scaleLinear().domain([0, d3.max(top, metric) || 1]).range([0, iw]);
+  const y = d3.scaleBand().domain(top.map(d => d.n)).range([0, ih]).padding(0.25);
+
+  const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
+
+  const wineRed = getComputedStyle(document.documentElement).getPropertyValue('--wine').trim();
+  const gold = '#D4A547';
+
+  top.forEach(d => {
+    const total = d.r + d.b;
+    if (state.type === 'rouge') {
+      g.append('rect').attr('class', 'bar-rect')
+        .attr('x', 0).attr('y', y(d.n)).attr('height', y.bandwidth())
+        .attr('width', x(d.r)).attr('fill', wineRed)
+        .datum(d);
+    } else if (state.type === 'blanc') {
+      g.append('rect').attr('class', 'bar-rect')
+        .attr('x', 0).attr('y', y(d.n)).attr('height', y.bandwidth())
+        .attr('width', x(d.b)).attr('fill', gold)
+        .datum(d);
+    } else {
+      g.append('rect').attr('class', 'bar-rect')
+        .attr('x', 0).attr('y', y(d.n)).attr('height', y.bandwidth())
+        .attr('width', x(d.r)).attr('fill', wineRed)
+        .datum(d);
+      g.append('rect').attr('class', 'bar-rect')
+        .attr('x', x(d.r)).attr('y', y(d.n)).attr('height', y.bandwidth())
+        .attr('width', x(d.b)).attr('fill', gold)
+        .datum(d);
+    }
+  });
+
+  g.append('g').attr('class', 'axis')
+    .selectAll('text').data(top).enter().append('text')
+    .attr('x', -8).attr('y', d => y(d.n) + y.bandwidth() / 2)
+    .attr('dy', '0.32em').attr('text-anchor', 'end')
+    .style('font-size', '10px')
+    .text(d => d.n.length > 26 ? d.n.slice(0, 26) + '…' : d.n);
+
+  g.selectAll('.bar-value').data(top).enter().append('text')
+    .attr('x', d => x(metric(d)) + 5)
+    .attr('y', d => y(d.n) + y.bandwidth() / 2 + 3)
+    .style('font-size', '10px')
+    .style('font-family', 'Fraunces, serif')
+    .style('fill', 'var(--muted)')
+    .text(d => fmt(metric(d)));
+
+  g.append('g').attr('class', 'axis')
+    .attr('transform', `translate(0,${ih})`)
+    .call(d3.axisBottom(x).ticks(5).tickFormat(d => fmt(d)));
+
+  g.selectAll('rect')
+    .on('mouseenter', function(e) {
+      const imp = d3.select(this).datum();
+      showTooltip(`
+        <div class="t-title">${imp.n}</div>
+        <div class="t-row"><span>Localité :</span><span>${imp.co}, ${imp.c}</span></div>
+        <div class="t-row"><span>Rouge :</span><span>${fmt(imp.r)} L</span></div>
+        <div class="t-row"><span>Blanc :</span><span>${fmt(imp.b)} L</span></div>
+        <div class="t-row"><span>Total :</span><span>${fmt(imp.t)} L</span></div>
+        ${imp.g ? `<div class="t-row"><span>Groupe :</span><span>${imp.g}</span></div>` : ''}
+      `, e);
+    })
+    .on('mousemove', e => moveTooltip(e))
+    .on('mouseleave', hideTooltip);
+}
+
+function renderScatter() {
+  const svg = d3.select('#scatterSvg');
+  const w = svg.node().getBoundingClientRect().width || 500;
+  const h = 360;
+  svg.attr('viewBox', `0 0 ${w} ${h}`).attr('height', h).html('');
+
+  let importers = DATA.importers.filter(d => d.r > 0 && d.b > 0);
+  if (state.selectedCanton) importers = importers.filter(i => i.c === state.selectedCanton);
+
+  const m = {top: 12, right: 16, bottom: 38, left: 56};
+  const iw = w - m.left - m.right;
+  const ih = h - m.top - m.bottom;
+
+  const maxVal = d3.max(importers, d => Math.max(d.r, d.b)) || 1;
+  const x = d3.scaleLog().domain([10, maxVal]).range([0, iw]);
+  const y = d3.scaleLog().domain([10, maxVal]).range([ih, 0]);
+
+  const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
+
+  const wineRed = getComputedStyle(document.documentElement).getPropertyValue('--wine').trim();
+  const gold = '#D4A547';
+  const cScale = d3.scaleLinear().domain([0, 1]).range([gold, wineRed]);
+
+  g.append('g').attr('class', 'axis').attr('transform', `translate(0,${ih})`)
+    .call(d3.axisBottom(x).ticks(4, d => fmt(d)));
+  g.append('g').attr('class', 'axis')
+    .call(d3.axisLeft(y).ticks(4, d => fmt(d)));
+
+  g.append('text').attr('x', iw / 2).attr('y', ih + 30)
+    .attr('text-anchor', 'middle')
+    .style('font-size', '11px').style('fill', 'var(--muted)')
+    .text('Litres rouge importés');
+  g.append('text').attr('transform', `rotate(-90)`).attr('x', -ih/2).attr('y', -42)
+    .attr('text-anchor', 'middle')
+    .style('font-size', '11px').style('fill', 'var(--muted)')
+    .text('Litres blanc importés');
+
+  g.append('line').attr('class', 'diag-line')
+    .attr('x1', x(10)).attr('y1', y(10))
+    .attr('x2', x(maxVal)).attr('y2', y(maxVal));
+
+  g.selectAll('.scatter-dot').data(importers).enter().append('circle')
+    .attr('class', 'scatter-dot')
+    .attr('cx', d => x(d.r))
+    .attr('cy', d => y(d.b))
+    .attr('r', d => Math.sqrt(d.t) * 0.012 + 1.5)
+    .attr('fill', d => cScale(d.r / (d.r + d.b)))
+    .attr('opacity', 0.5)
+    .attr('stroke', 'none')
+    .on('mouseenter', (e, d) => {
+      showTooltip(`
+        <div class="t-title">${d.n}</div>
+        <div class="t-row"><span>Rouge :</span><span>${fmt(d.r)} L</span></div>
+        <div class="t-row"><span>Blanc :</span><span>${fmt(d.b)} L</span></div>
+        <div class="t-row"><span>Total :</span><span>${fmt(d.t)} L</span></div>
+      `, e);
+    })
+    .on('mousemove', e => moveTooltip(e))
+    .on('mouseleave', hideTooltip);
+}
+
+function renderHistory() {
+  const svg = d3.select('#historySvg');
+  const w = svg.node().getBoundingClientRect().width || 500;
+  const h = 360;
+  svg.attr('viewBox', `0 0 ${w} ${h}`).attr('height', h).html('');
+
+  const data = DATA.history.all.filter(d => d.annee <= 2025);
+  const m = {top: 12, right: 60, bottom: 38, left: 56};
+  const iw = w - m.left - m.right;
+  const ih = h - m.top - m.bottom;
+
+  const x = d3.scaleLinear()
+    .domain(d3.extent(data, d => d.annee)).range([0, iw]);
+  const y = d3.scaleLinear()
+    .domain([0, d3.max(data, d => d.kilos)*1.05]).range([ih, 0]);
+
+  const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
+
+  g.selectAll('.gridline-y').data(y.ticks(5)).enter().append('line')
+    .attr('class', 'gridline').attr('x1', 0).attr('x2', iw)
+    .attr('y1', y).attr('y2', y);
+
+  g.append('g').attr('class', 'axis').attr('transform', `translate(0,${ih})`)
+    .call(d3.axisBottom(x).tickFormat(d3.format('d')).ticks(7));
+  g.append('g').attr('class', 'axis')
+    .call(d3.axisLeft(y).ticks(5).tickFormat(d => (d/1e6).toFixed(0) + 'M'));
+
+  g.append('text').attr('transform', `rotate(-90)`).attr('x', -ih/2).attr('y', -42)
+    .attr('text-anchor', 'middle')
+    .style('font-size', '11px').style('fill', 'var(--muted)')
+    .text('Kilos importés (millions)');
+
+  const wineRed = getComputedStyle(document.documentElement).getPropertyValue('--wine').trim();
+
+  const area = d3.area().x(d => x(d.annee)).y0(ih).y1(d => y(d.kilos)).curve(d3.curveMonotoneX);
+  g.append('path').datum(data).attr('class', 'history-area')
+    .attr('fill', wineRed).attr('d', area);
+
+  const line = d3.line().x(d => x(d.annee)).y(d => y(d.kilos)).curve(d3.curveMonotoneX);
+  g.append('path').datum(data).attr('class', 'history-line')
+    .attr('stroke', wineRed).attr('d', line);
+
+  g.selectAll('.history-dot').data(data).enter().append('circle')
+    .attr('cx', d => x(d.annee)).attr('cy', d => y(d.kilos)).attr('r', 4)
+    .attr('fill', wineRed).attr('stroke', 'var(--paper)').attr('stroke-width', 1.5)
+    .style('cursor', 'pointer')
+    .on('mouseenter', (e, d) => {
+      showTooltip(`
+        <div class="t-title">${d.annee}</div>
+        <div class="t-row"><span>Volume :</span><span>${(d.kilos/1e6).toFixed(0)} Mkg</span></div>
+        <div class="t-row"><span>Valeur :</span><span>${(d.chf/1e6).toFixed(0)} M CHF</span></div>
+        <div class="t-row"><span>Prix moyen :</span><span>${d.prix_par_kg.toFixed(2)} CHF/kg</span></div>
+      `, e);
+    })
+    .on('mousemove', e => moveTooltip(e))
+    .on('mouseleave', hideTooltip);
+
+  const first = data[0], last = data[data.length - 1];
+  g.append('text').attr('x', x(first.annee)).attr('y', y(first.kilos) - 12)
+    .attr('text-anchor', 'start').style('font-size', '11px')
+    .style('font-weight', '700').style('fill', wineRed)
+    .text(`${(first.kilos/1e6).toFixed(0)} Mkg`);
+  g.append('text').attr('x', x(last.annee)).attr('y', y(last.kilos) - 12)
+    .attr('text-anchor', 'end').style('font-size', '11px')
+    .style('font-weight', '700').style('fill', wineRed)
+    .text(`${(last.kilos/1e6).toFixed(0)} Mkg`);
+}
+
+function renderSelInfo() {
+  const el = document.getElementById('selInfo');
+  if (state.selectedCanton) {
+    const c = DATA.cantons.find(d => d.canton === state.selectedCanton);
+    el.innerHTML = `Filtré sur <b>${c.canton}</b> : ${c.n} importateurs, ${fmt(c.total)} L (${(c.rouge/c.total*100).toFixed(0)}% rouge)`;
+  } else {
+    el.textContent = '';
+  }
+}
+
+function renderAll() {
+  renderKpis();
+  renderMap();
+  renderBars();
+  renderScatter();
+  renderHistory();
+  renderSelInfo();
+}
+
+document.querySelectorAll('.type-toggle button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.type-toggle button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.type = btn.dataset.type;
+    renderAll();
+  });
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  state.selectedCanton = null;
+  state.type = 'total';
+  document.querySelectorAll('.type-toggle button').forEach(b => b.classList.remove('active'));
+  document.querySelector('.type-toggle button[data-type="total"]').classList.add('active');
+  renderAll();
+});
+
+window.addEventListener('resize', renderAll);
+renderAll();
+</script>
+</body>
+</html>
